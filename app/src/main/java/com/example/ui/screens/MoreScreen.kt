@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,20 +29,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,7 +63,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,11 +83,25 @@ fun MoreScreen(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
     val organization by viewModel.organization.collectAsState()
     val currentTheme by viewModel.currentTheme.collectAsState()
+    val isDemoDataActive by viewModel.isDemoDataActive.collectAsState()
 
     var showThemePicker by remember { mutableStateOf(false) }
+    var showOwnerProfileDialog by remember { mutableStateOf(false) }
+    var showClearDataConfirmDialog by remember { mutableStateOf(false) }
+
+    val sha1Fingerprint = "66:62:A1:7C:5C:22:DE:F9:E8:90:EC:23:E9:B8:E4:84:F1:14:12:B8"
+    val sha256Fingerprint = "A7:5D:71:FC:90:5A:CF:00:E4:32:E1:77:20:A7:87:B8:16:87:2E:3C:E5:CA:27:2A:3E:98:42:D8:3E:6A:74:61"
+
+    fun copyToClipboard(label: String, text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText(label, text)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(context, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
+    }
 
     Column(
         modifier = modifier
@@ -88,51 +114,102 @@ fun MoreScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Screen Title
-        Text(
-            text = "More",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Settings & Profile",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFECFDF5)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF10B981)))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Real-Time Sync",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF047857)
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Organization & Profile Header Card
+        // Organization & Owner Profile Card with Edit Button
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showOwnerProfileDialog = true }
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StaffAvatar(
-                    name = currentUser?.displayName ?: "Rahul Shah",
-                    size = 52.dp,
-                    backgroundColor = StaffHubBlue
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = currentUser?.displayName ?: "Rahul Shah",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StaffAvatar(
+                        name = currentUser?.displayName ?: "Rahul Shah",
+                        imageUrl = currentUser?.avatarUrl,
+                        size = 56.dp,
+                        backgroundColor = StaffHubBlue
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = currentUser?.displayName ?: "Rahul Shah",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = currentUser?.customRoleTitle ?: "Organization Owner",
+                            fontSize = 13.sp,
+                            color = StaffHubBlue,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${currentUser?.gender ?: "Male"} • ${currentUser?.age ?: 30} yrs • ${organization.name}",
+                            fontSize = 11.5.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = StaffHubBlue.copy(alpha = 0.1f),
+                        modifier = Modifier.clickable { showOwnerProfileDialog = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = StaffHubBlue, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = StaffHubBlue)
+                        }
+                    }
+                }
+
+                if (!currentUser?.bio.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = organization.name,
-                        fontSize = 13.sp,
-                        color = StaffHubBlue,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "${organization.businessCategory} • ${organization.country}",
-                        fontSize = 11.5.sp,
+                        text = "“${currentUser?.bio}”",
+                        fontSize = 12.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         color = Color(0xFF64748B)
                     )
                 }
@@ -141,7 +218,155 @@ fun MoreScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Operations Section
+        // Backend & Fingerprint Configuration Card
+        Text(
+            text = "Firebase & Backend Credentials",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF64748B),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2563EB).copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Fingerprint, contentDescription = null, tint = StaffHubBlue, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "App Signing Fingerprint",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Add this in Firebase Console for Google Sign-In",
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            copyToClipboard("SHA-1 & SHA-256", "SHA1: $sha1Fingerprint\nSHA256: $sha256Fingerprint")
+                        }
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy Fingerprint", tint = StaffHubBlue)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "SHA-1 Certificate Fingerprint:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF475569)
+                        )
+                        Text(
+                            text = sha1Fingerprint,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Package ID: com.staffhub.apps",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = StaffHubBlue
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        copyToClipboard("SHA-1 Fingerprint", sha1Fingerprint)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = StaffHubBlue),
+                    modifier = Modifier.fillMaxWidth().height(40.dp)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Copy SHA-1 for Firebase Console", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Data Management (Remove All Demo Data / Restore)
+        Text(
+            text = "Data Management",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF64748B),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column {
+                MoreMenuItem(
+                    title = "Remove All Demo Data",
+                    subtitle = "Clear sample team & attendance for fresh entry",
+                    icon = Icons.Default.DeleteSweep,
+                    iconColor = Color(0xFFEF4444),
+                    onClick = { showClearDataConfirmDialog = true }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+                MoreMenuItem(
+                    title = "Restore Demo Data",
+                    subtitle = "Load sample team roster and daily attendance",
+                    icon = Icons.Default.Refresh,
+                    iconColor = Color(0xFF10B981),
+                    onClick = {
+                        viewModel.loadDemoData()
+                        Toast.makeText(context, "Demo workforce data restored", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Workforce Operations
         Text(
             text = "Workforce Operations",
             fontSize = 14.sp,
@@ -229,10 +454,7 @@ fun MoreScreen(
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = if (isSelected) theme.primaryColor else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier
-                                        .clickable {
-                                            viewModel.setTheme(theme)
-                                        }
+                                    modifier = Modifier.clickable { viewModel.setTheme(theme) }
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -251,14 +473,6 @@ fun MoreScreen(
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
                                         )
-                                        if (theme.isPastel) {
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "✦",
-                                                fontSize = 10.sp,
-                                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else theme.primaryColor
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -266,23 +480,6 @@ fun MoreScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                MoreMenuItem(
-                    title = "Organization Settings",
-                    subtitle = "Working days, time zone, departments",
-                    icon = Icons.Default.Business,
-                    iconColor = Color(0xFF6366F1),
-                    onClick = {}
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                MoreMenuItem(
-                    title = "Audit History & Security",
-                    subtitle = "Role permissions & activity trail",
-                    icon = Icons.Default.Security,
-                    iconColor = Color(0xFF0D9488),
-                    onClick = {}
-                )
             }
         }
 
@@ -311,49 +508,78 @@ fun MoreScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Developer Credit Card (as requested in PRD: "Made with love by Rahul Shah")
+        // Developer Credit Card
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Made with ",
-                        fontSize = 13.sp,
-                        color = Color(0xFF64748B),
-                        fontWeight = FontWeight.Medium
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Love",
-                        tint = Color(0xFFEF4444),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = " by Rahul Shah",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "StaffHub v1.0 • All-in-One Workforce Management",
+                    text = "Made with love by Rahul Shah",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "StaffHub Version 1.0 • All-in-One Workforce Suite",
                     fontSize = 11.sp,
-                    color = Color(0xFF94A3B8)
+                    color = Color(0xFF64748B)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(110.dp))
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+
+    // Owner Profile Dialog
+    if (showOwnerProfileDialog && currentUser != null) {
+        OwnerProfileDialog(
+            profile = currentUser!!,
+            onDismiss = { showOwnerProfileDialog = false },
+            onSave = { updatedProfile ->
+                viewModel.updateUserProfile(updatedProfile)
+                showOwnerProfileDialog = false
+            }
+        )
+    }
+
+    // Clear Demo Data Confirmation Dialog
+    if (showClearDataConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDataConfirmDialog = false },
+            title = {
+                Text(text = "Remove All Demo Data?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    text = "This will erase all sample staff, demo attendance, and leave records so you can start with a fresh blank workspace to add your real team manually."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearAllDemoData()
+                        showClearDataConfirmDialog = false
+                        Toast.makeText(context, "All demo data removed. Ready for manual entry!", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Clear All", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showClearDataConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -373,17 +599,20 @@ private fun MoreMenuItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(iconColor.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = title,
+                    contentDescription = null,
                     tint = iconColor,
                     modifier = Modifier.size(20.dp)
                 )
@@ -392,18 +621,18 @@ private fun MoreMenuItem(
             Column {
                 Text(
                     text = title,
-                    fontSize = 14.5.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFF64748B)
                 )
             }
         }
-
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
             contentDescription = null,

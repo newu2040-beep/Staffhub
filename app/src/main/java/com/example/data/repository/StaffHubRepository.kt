@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import android.util.Log
 import com.example.data.model.AttendanceRecord
 import com.example.data.model.AttendanceStatus
 import com.example.data.model.Department
@@ -11,6 +12,8 @@ import com.example.data.model.UserProfile
 import com.example.data.model.UserRole
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,16 +31,19 @@ class StaffHubRepository {
     private val auth: FirebaseAuth? = try {
         FirebaseAuth.getInstance()
     } catch (e: Exception) {
+        Log.w("StaffHubRepo", "FirebaseAuth unavailable", e)
         null
     }
 
     private val firestore: FirebaseFirestore? = try {
         FirebaseFirestore.getInstance()
     } catch (e: Exception) {
+        Log.w("StaffHubRepo", "Firestore unavailable", e)
         null
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val listeners = mutableListOf<ListenerRegistration>()
 
     // Reactive State
     private val _currentUser = MutableStateFlow<UserProfile?>(
@@ -46,8 +52,14 @@ class StaffHubRepository {
             email = "rahul@staffhub.app",
             displayName = "Rahul Shah",
             role = UserRole.OWNER,
+            customRoleTitle = "Organization Owner",
             organizationId = "org_staffhub_default",
-            organizationName = "StaffHub Org"
+            organizationName = "StaffHub Org",
+            gender = "Male",
+            age = 30,
+            phone = "+977 9841234567",
+            bio = "Founder & Chief Executive",
+            emergencyContact = "+977 9801234567"
         )
     )
     val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
@@ -80,9 +92,12 @@ class StaffHubRepository {
     private val _selectedCalendarDate = MutableStateFlow(todayString())
     val selectedCalendarDate: StateFlow<String> = _selectedCalendarDate.asStateFlow()
 
+    private val _isDemoDataActive = MutableStateFlow(true)
+    val isDemoDataActive: StateFlow<Boolean> = _isDemoDataActive.asStateFlow()
+
     init {
-        initializeSampleData()
-        syncFromFirestore()
+        loadDemoData(persistToFirestore = false)
+        attachFirestoreRealtimeListeners()
     }
 
     fun setSelectedCalendarDate(date: String) {
@@ -93,14 +108,14 @@ class StaffHubRepository {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 
-    private fun initializeSampleData() {
+    fun loadDemoData(persistToFirestore: Boolean = true) {
         val initialStaff = listOf(
             StaffMember(
                 id = "s1",
                 employeeId = "EMP-101",
                 fullName = "Aarav Sharma",
-                jobTitle = "Waiter",
-                role = UserRole.STAFF,
+                jobTitle = "Head Waiter",
+                role = UserRole.TEAM_LEADER,
                 department = "Service",
                 status = "Active",
                 presentDays = 22,
@@ -114,12 +129,12 @@ class StaffHubRepository {
                 id = "s2",
                 employeeId = "EMP-102",
                 fullName = "Priya Karki",
-                jobTitle = "Cashier",
+                jobTitle = "Cashier & Host",
                 role = UserRole.STAFF,
                 department = "Front Desk",
                 status = "Active",
-                presentDays = 21,
-                absentDays = 3,
+                presentDays = 24,
+                absentDays = 1,
                 leaveDays = 0,
                 email = "priya@staffhub.app",
                 phone = "+977 9841234568",
@@ -129,24 +144,24 @@ class StaffHubRepository {
                 id = "s3",
                 employeeId = "EMP-103",
                 fullName = "Rohan Basnet",
-                jobTitle = "Chef",
+                jobTitle = "Sous Chef",
                 role = UserRole.STAFF,
                 department = "Kitchen",
                 status = "Active",
                 presentDays = 18,
-                absentDays = 6,
+                absentDays = 5,
                 leaveDays = 2,
                 email = "rohan@staffhub.app",
                 phone = "+977 9841234569",
-                avatarBgColor = 0xFFE11D48
+                avatarBgColor = 0xFFEA580C
             ),
             StaffMember(
                 id = "s4",
                 employeeId = "EMP-104",
                 fullName = "Sita Gurung",
-                jobTitle = "Supervisor",
+                jobTitle = "Shift Supervisor",
                 role = UserRole.SUPERVISOR,
-                department = "Operations",
+                department = "Service",
                 status = "Active",
                 presentDays = 23,
                 absentDays = 1,
@@ -224,7 +239,7 @@ class StaffHubRepository {
                 id = "att_1",
                 staffId = "s1",
                 staffName = "Aarav Sharma",
-                staffRole = "Waiter",
+                staffRole = "Head Waiter",
                 date = today,
                 status = AttendanceStatus.PRESENT,
                 checkInTime = "9:12 AM",
@@ -234,7 +249,7 @@ class StaffHubRepository {
                 id = "att_2",
                 staffId = "s2",
                 staffName = "Priya Karki",
-                staffRole = "Cashier",
+                staffRole = "Cashier & Host",
                 date = today,
                 status = AttendanceStatus.PRESENT,
                 checkInTime = "8:58 AM",
@@ -244,7 +259,7 @@ class StaffHubRepository {
                 id = "att_3",
                 staffId = "s3",
                 staffName = "Rohan Basnet",
-                staffRole = "Chef",
+                staffRole = "Sous Chef",
                 date = today,
                 status = AttendanceStatus.ABSENT,
                 checkInTime = null,
@@ -254,7 +269,7 @@ class StaffHubRepository {
                 id = "att_4",
                 staffId = "s4",
                 staffName = "Sita Gurung",
-                staffRole = "Supervisor",
+                staffRole = "Shift Supervisor",
                 date = today,
                 status = AttendanceStatus.PRESENT,
                 checkInTime = "9:03 AM",
@@ -336,36 +351,213 @@ class StaffHubRepository {
                 staffId = "s3",
                 staffName = "Rohan Basnet",
                 leaveType = "Personal Leave",
-                startDate = "2025-10-20",
-                endDate = "2025-10-22",
+                startDate = "2026-10-20",
+                endDate = "2026-10-22",
                 isFullDay = true,
                 reason = "Family wedding celebration",
                 status = "Pending",
                 requestedAt = "2 hours ago"
             )
         )
+        _isDemoDataActive.value = true
+
+        if (persistToFirestore) {
+            persistFullDataToFirestore()
+        }
     }
 
-    private fun syncFromFirestore() {
+    fun clearAllDemoData() {
+        _staffList.value = emptyList()
+        _attendanceList.value = emptyList()
+        _shifts.value = emptyList()
+        _leaveRequests.value = emptyList()
+        _isDemoDataActive.value = false
+
+        // Also clean up from Firestore
+        firestore?.let { fs ->
+            scope.launch {
+                try {
+                    val orgId = _organization.value.id
+                    val orgRef = fs.collection("organizations").document(orgId)
+                    listOf("staff", "attendance", "shifts", "leaveRequests").forEach { coll ->
+                        val snap = orgRef.collection(coll).get().await()
+                        for (doc in snap.documents) {
+                            doc.reference.delete()
+                        }
+                    }
+                    Log.i("StaffHubRepo", "Cleared all demo data from Firestore")
+                } catch (e: Exception) {
+                    Log.w("StaffHubRepo", "Failed to clear Firestore collection", e)
+                }
+            }
+        }
+    }
+
+    private fun persistFullDataToFirestore() {
+        val fs = firestore ?: return
+        val orgId = _organization.value.id
+        scope.launch {
+            try {
+                val orgRef = fs.collection("organizations").document(orgId)
+                orgRef.set(mapOf(
+                    "id" to orgId,
+                    "name" to _organization.value.name,
+                    "businessCategory" to _organization.value.businessCategory,
+                    "ownerName" to _organization.value.ownerName
+                ), SetOptions.merge())
+
+                _staffList.value.forEach { staff ->
+                    orgRef.collection("staff").document(staff.id).set(staffToMap(staff), SetOptions.merge())
+                }
+                _attendanceList.value.forEach { att ->
+                    orgRef.collection("attendance").document(att.id).set(attendanceToMap(att), SetOptions.merge())
+                }
+                _shifts.value.forEach { sh ->
+                    orgRef.collection("shifts").document(sh.id).set(shiftToMap(sh), SetOptions.merge())
+                }
+                _leaveRequests.value.forEach { lv ->
+                    orgRef.collection("leaveRequests").document(lv.id).set(leaveToMap(lv), SetOptions.merge())
+                }
+            } catch (e: Exception) {
+                Log.w("StaffHubRepo", "Error persisting initial data to Firestore", e)
+            }
+        }
+    }
+
+    private fun attachFirestoreRealtimeListeners() {
         val fs = firestore ?: return
         val orgId = _organization.value.id
 
-        scope.launch {
-            try {
-                fs.collection("organizations").document(orgId)
-                    .collection("staff")
-                    .addSnapshotListener { snapshot, error ->
-                        if (error == null && snapshot != null && !snapshot.isEmpty) {
-                            val items = snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(StaffMember::class.java)?.copy(id = doc.id)
-                            }
-                            if (items.isNotEmpty()) {
-                                _staffList.value = items
-                            }
-                        }
+        // Clear existing listeners
+        listeners.forEach { it.remove() }
+        listeners.clear()
+
+        try {
+            val orgRef = fs.collection("organizations").document(orgId)
+
+            // 1. Staff Listener
+            val staffReg = orgRef.collection("staff").addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("StaffHubRepo", "Staff listener error: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        mapDocToStaff(doc.id, doc.data)
                     }
-            } catch (e: Exception) {
-                // Keep local state
+                    if (list.isNotEmpty()) {
+                        _staffList.value = list
+                        _isDemoDataActive.value = false
+                    }
+                }
+            }
+            listeners.add(staffReg)
+
+            // 2. Attendance Listener
+            val attReg = orgRef.collection("attendance").addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("StaffHubRepo", "Attendance listener error: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        mapDocToAttendance(doc.id, doc.data)
+                    }
+                    if (list.isNotEmpty()) {
+                        _attendanceList.value = list
+                    }
+                }
+            }
+            listeners.add(attReg)
+
+            // 3. Shifts Listener
+            val shiftReg = orgRef.collection("shifts").addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null && !snapshot.isEmpty) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        mapDocToShift(doc.id, doc.data)
+                    }
+                    if (list.isNotEmpty()) {
+                        _shifts.value = list
+                    }
+                }
+            }
+            listeners.add(shiftReg)
+
+            // 4. Leave Requests Listener
+            val leaveReg = orgRef.collection("leaveRequests").addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null && !snapshot.isEmpty) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        mapDocToLeave(doc.id, doc.data)
+                    }
+                    if (list.isNotEmpty()) {
+                        _leaveRequests.value = list
+                    }
+                }
+            }
+            listeners.add(leaveReg)
+
+            // 5. User Profile Listener
+            val uid = _currentUser.value?.uid ?: "usr_rahul_shah"
+            val userReg = fs.collection("users").document(uid).addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null && snapshot.exists()) {
+                    val d = snapshot.data
+                    if (d != null) {
+                        val current = _currentUser.value
+                        _currentUser.value = current?.copy(
+                            displayName = d["displayName"] as? String ?: current.displayName,
+                            customRoleTitle = d["customRoleTitle"] as? String ?: current.customRoleTitle,
+                            gender = d["gender"] as? String ?: current.gender,
+                            age = (d["age"] as? Long)?.toInt() ?: current.age,
+                            phone = d["phone"] as? String ?: current.phone,
+                            bio = d["bio"] as? String ?: current.bio,
+                            avatarUrl = d["avatarUrl"] as? String ?: current.avatarUrl,
+                            organizationName = d["organizationName"] as? String ?: current.organizationName
+                        )
+                    }
+                }
+            }
+            listeners.add(userReg)
+
+        } catch (e: Exception) {
+            Log.e("StaffHubRepo", "Failed to attach Firestore listeners", e)
+        }
+    }
+
+    // Owner Profile Customization
+    fun updateUserProfile(profile: UserProfile) {
+        _currentUser.value = profile
+
+        // Sync to Firestore in real-time
+        firestore?.let { fs ->
+            scope.launch {
+                try {
+                    fs.collection("users").document(profile.uid).set(mapOf(
+                        "uid" to profile.uid,
+                        "email" to profile.email,
+                        "displayName" to profile.displayName,
+                        "role" to profile.role.name,
+                        "customRoleTitle" to profile.customRoleTitle,
+                        "gender" to profile.gender,
+                        "age" to profile.age,
+                        "phone" to profile.phone,
+                        "bio" to profile.bio,
+                        "avatarUrl" to (profile.avatarUrl ?: ""),
+                        "organizationName" to profile.organizationName,
+                        "organizationId" to profile.organizationId
+                    ), SetOptions.merge())
+
+                    // Also update organization owner name if matching
+                    _organization.value = _organization.value.copy(
+                        ownerName = profile.displayName,
+                        name = profile.organizationName
+                    )
+                    fs.collection("organizations").document(profile.organizationId).set(mapOf(
+                        "ownerName" to profile.displayName,
+                        "name" to profile.organizationName
+                    ), SetOptions.merge())
+                } catch (e: Exception) {
+                    Log.e("StaffHubRepo", "Error updating profile in Firestore", e)
+                }
             }
         }
     }
@@ -374,6 +566,7 @@ class StaffHubRepository {
         val newStaff = if (staff.id.isEmpty()) staff.copy(id = "s_${UUID.randomUUID().toString().take(6)}") else staff
         val updated = _staffList.value + newStaff
         _staffList.value = updated
+        _isDemoDataActive.value = false
 
         // Push to Firestore asynchronously
         firestore?.let { fs ->
@@ -381,9 +574,9 @@ class StaffHubRepository {
                 try {
                     fs.collection("organizations").document(_organization.value.id)
                         .collection("staff").document(newStaff.id)
-                        .set(newStaff)
+                        .set(staffToMap(newStaff), SetOptions.merge())
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("StaffHubRepo", "Error adding staff to Firestore", e)
                 }
             }
         }
@@ -398,9 +591,9 @@ class StaffHubRepository {
                 try {
                     fs.collection("organizations").document(_organization.value.id)
                         .collection("staff").document(staff.id)
-                        .set(staff)
+                        .set(staffToMap(staff), SetOptions.merge())
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("StaffHubRepo", "Error updating staff in Firestore", e)
                 }
             }
         }
@@ -415,7 +608,7 @@ class StaffHubRepository {
                         .collection("staff").document(staffId)
                         .delete()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("StaffHubRepo", "Error deleting staff from Firestore", e)
                 }
             }
         }
@@ -472,9 +665,9 @@ class StaffHubRepository {
                 try {
                     fs.collection("organizations").document(_organization.value.id)
                         .collection("attendance").document(record.id)
-                        .set(record)
+                        .set(attendanceToMap(record), SetOptions.merge())
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("StaffHubRepo", "Error saving attendance in Firestore", e)
                 }
             }
         }
@@ -489,9 +682,9 @@ class StaffHubRepository {
                 try {
                     fs.collection("organizations").document(_organization.value.id)
                         .collection("leaveRequests").document(newReq.id)
-                        .set(newReq)
+                        .set(leaveToMap(newReq), SetOptions.merge())
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("StaffHubRepo", "Error adding leave request in Firestore", e)
                 }
             }
         }
@@ -503,11 +696,38 @@ class StaffHubRepository {
                 req.copy(status = status, decisionNote = decisionNote)
             } else req
         }
+
+        firestore?.let { fs ->
+            scope.launch {
+                try {
+                    fs.collection("organizations").document(_organization.value.id)
+                        .collection("leaveRequests").document(requestId)
+                        .set(mapOf(
+                            "status" to status,
+                            "decisionNote" to (decisionNote ?: "")
+                        ), SetOptions.merge())
+                } catch (e: Exception) {
+                    Log.e("StaffHubRepo", "Error updating leave status in Firestore", e)
+                }
+            }
+        }
     }
 
     fun addShift(shift: Shift) {
         val newShift = shift.copy(id = "sh_${UUID.randomUUID().toString().take(6)}")
         _shifts.value = _shifts.value + newShift
+
+        firestore?.let { fs ->
+            scope.launch {
+                try {
+                    fs.collection("organizations").document(_organization.value.id)
+                        .collection("shifts").document(newShift.id)
+                        .set(shiftToMap(newShift), SetOptions.merge())
+                } catch (e: Exception) {
+                    Log.e("StaffHubRepo", "Error adding shift in Firestore", e)
+                }
+            }
+        }
     }
 
     fun signInWithEmail(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
@@ -519,31 +739,34 @@ class StaffHubRepository {
         auth?.signInWithEmailAndPassword(email, pass)
             ?.addOnSuccessListener { result ->
                 val u = result.user
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = u?.uid ?: "user_default",
                     email = u?.email ?: email,
                     displayName = u?.displayName ?: email.substringBefore("@").replaceFirstChar { it.uppercase() },
                     role = UserRole.OWNER
                 )
+                _currentUser.value = profile
+                attachFirestoreRealtimeListeners()
                 onSuccess()
             }
             ?.addOnFailureListener {
                 // If offline / unconfigured, allow demo sign-in for seamless onboarding
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = "usr_${email.hashCode()}",
                     email = email,
                     displayName = email.substringBefore("@").replaceFirstChar { it.uppercase() },
                     role = UserRole.OWNER
                 )
+                _currentUser.value = profile
                 onSuccess()
             } ?: run {
-                // Fallback for development/offline
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = "usr_demo",
                     email = email,
                     displayName = email.substringBefore("@").replaceFirstChar { it.uppercase() },
                     role = UserRole.OWNER
                 )
+                _currentUser.value = profile
                 onSuccess()
             }
     }
@@ -557,34 +780,39 @@ class StaffHubRepository {
         auth?.createUserWithEmailAndPassword(email, pass)
             ?.addOnSuccessListener { result ->
                 val u = result.user
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = u?.uid ?: "user_default",
                     email = u?.email ?: email,
                     displayName = name,
                     role = UserRole.OWNER,
                     organizationName = orgName
                 )
+                _currentUser.value = profile
                 _organization.value = _organization.value.copy(name = orgName, ownerName = name)
+                updateUserProfile(profile)
+                attachFirestoreRealtimeListeners()
                 onSuccess()
             }
             ?.addOnFailureListener {
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = "usr_${email.hashCode()}",
                     email = email,
                     displayName = name,
                     role = UserRole.OWNER,
                     organizationName = orgName
                 )
+                _currentUser.value = profile
                 _organization.value = _organization.value.copy(name = orgName, ownerName = name)
                 onSuccess()
             } ?: run {
-                _currentUser.value = UserProfile(
+                val profile = UserProfile(
                     uid = "usr_demo",
                     email = email,
                     displayName = name,
                     role = UserRole.OWNER,
                     organizationName = orgName
                 )
+                _currentUser.value = profile
                 _organization.value = _organization.value.copy(name = orgName, ownerName = name)
                 onSuccess()
             }
@@ -626,11 +854,8 @@ class StaffHubRepository {
                         avatarUrl = user?.photoUrl?.toString()
                     )
                     _currentUser.value = profile
-
-                    // Sync to Firestore
-                    firestore?.let { fs ->
-                        fs.collection("users").document(profile.uid).set(profile)
-                    }
+                    updateUserProfile(profile)
+                    attachFirestoreRealtimeListeners()
 
                     kotlinx.coroutines.withContext(Dispatchers.Main) {
                         onSuccess()
@@ -641,13 +866,12 @@ class StaffHubRepository {
                     }
                 }
             } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
-                android.util.Log.w("StaffHubAuth", "Google Sign-In cancelled: ${e.message}")
+                Log.w("StaffHubAuth", "Google Sign-In cancelled by user")
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onCancel()
                 }
             } catch (e: Exception) {
-                android.util.Log.e("StaffHubAuth", "Google Sign-In error", e)
-                // If Play Services is unavailable on local emulator, provide seamless demo sign-in
+                Log.e("StaffHubAuth", "Google Sign-In fallback error", e)
                 val demoProfile = UserProfile(
                     uid = "usr_google_demo",
                     email = "gleg30900@gmail.com",
@@ -681,14 +905,195 @@ class StaffHubRepository {
     fun signOut() {
         auth?.signOut()
         _currentUser.value = null
+        listeners.forEach { it.remove() }
+        listeners.clear()
     }
 
     fun updateOrganization(name: String, category: String, country: String, timeZone: String) {
-        _organization.value = _organization.value.copy(
+        val updated = _organization.value.copy(
             name = name,
             businessCategory = category,
             country = country,
             timeZone = timeZone
         )
+        _organization.value = updated
+
+        firestore?.let { fs ->
+            scope.launch {
+                try {
+                    fs.collection("organizations").document(updated.id).set(mapOf(
+                        "name" to updated.name,
+                        "businessCategory" to updated.businessCategory,
+                        "country" to updated.country,
+                        "timeZone" to updated.timeZone
+                    ), SetOptions.merge())
+                } catch (e: Exception) {
+                    Log.e("StaffHubRepo", "Error updating org in Firestore", e)
+                }
+            }
+        }
+    }
+
+    // Safe Mappings to avoid reflection crashes with Firestore
+    private fun staffToMap(s: StaffMember): Map<String, Any> {
+        return mapOf(
+            "id" to s.id,
+            "organizationId" to s.organizationId,
+            "employeeId" to s.employeeId,
+            "fullName" to s.fullName,
+            "jobTitle" to s.jobTitle,
+            "role" to s.role.name,
+            "department" to s.department,
+            "branch" to s.branch,
+            "employmentType" to s.employmentType,
+            "email" to s.email,
+            "phone" to s.phone,
+            "status" to s.status,
+            "joiningDate" to s.joiningDate,
+            "assignedShift" to s.assignedShift,
+            "presentDays" to s.presentDays,
+            "absentDays" to s.absentDays,
+            "leaveDays" to s.leaveDays,
+            "avatarBgColor" to s.avatarBgColor
+        )
+    }
+
+    private fun mapDocToStaff(id: String, d: Map<String, Any>?): StaffMember? {
+        if (d == null) return null
+        return try {
+            val roleStr = d["role"] as? String ?: "STAFF"
+            val role = try { UserRole.valueOf(roleStr) } catch (e: Exception) { UserRole.STAFF }
+            StaffMember(
+                id = id,
+                organizationId = d["organizationId"] as? String ?: "",
+                employeeId = d["employeeId"] as? String ?: id,
+                fullName = d["fullName"] as? String ?: "Unknown",
+                jobTitle = d["jobTitle"] as? String ?: "Staff",
+                role = role,
+                department = d["department"] as? String ?: "General",
+                branch = d["branch"] as? String ?: "Main Branch",
+                employmentType = d["employmentType"] as? String ?: "Full-time",
+                email = d["email"] as? String ?: "",
+                phone = d["phone"] as? String ?: "",
+                status = d["status"] as? String ?: "Active",
+                joiningDate = d["joiningDate"] as? String ?: "2024-01-15",
+                assignedShift = d["assignedShift"] as? String ?: "Morning Shift",
+                presentDays = (d["presentDays"] as? Long)?.toInt() ?: 0,
+                absentDays = (d["absentDays"] as? Long)?.toInt() ?: 0,
+                leaveDays = (d["leaveDays"] as? Long)?.toInt() ?: 0,
+                avatarBgColor = (d["avatarBgColor"] as? Long) ?: 0xFF2563EB
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun attendanceToMap(a: AttendanceRecord): Map<String, Any> {
+        return mapOf(
+            "id" to a.id,
+            "organizationId" to a.organizationId,
+            "staffId" to a.staffId,
+            "staffName" to a.staffName,
+            "staffRole" to a.staffRole,
+            "date" to a.date,
+            "status" to a.status.name,
+            "checkInTime" to (a.checkInTime ?: ""),
+            "checkOutTime" to (a.checkOutTime ?: ""),
+            "shiftName" to a.shiftName,
+            "notes" to (a.notes ?: "")
+        )
+    }
+
+    private fun mapDocToAttendance(id: String, d: Map<String, Any>?): AttendanceRecord? {
+        if (d == null) return null
+        return try {
+            val statusStr = d["status"] as? String ?: "PRESENT"
+            val status = try { AttendanceStatus.valueOf(statusStr) } catch (e: Exception) { AttendanceStatus.PRESENT }
+            AttendanceRecord(
+                id = id,
+                organizationId = d["organizationId"] as? String ?: "",
+                staffId = d["staffId"] as? String ?: "",
+                staffName = d["staffName"] as? String ?: "",
+                staffRole = d["staffRole"] as? String ?: "",
+                date = d["date"] as? String ?: todayString(),
+                status = status,
+                checkInTime = (d["checkInTime"] as? String)?.takeIf { it.isNotBlank() },
+                checkOutTime = (d["checkOutTime"] as? String)?.takeIf { it.isNotBlank() },
+                shiftName = d["shiftName"] as? String ?: "Morning Shift",
+                notes = (d["notes"] as? String)?.takeIf { it.isNotBlank() }
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun shiftToMap(s: Shift): Map<String, Any> {
+        return mapOf(
+            "id" to s.id,
+            "organizationId" to s.organizationId,
+            "name" to s.name,
+            "startTime" to s.startTime,
+            "endTime" to s.endTime,
+            "breakMinutes" to s.breakMinutes,
+            "colorHex" to s.colorHex,
+            "assignedStaffCount" to s.assignedStaffCount
+        )
+    }
+
+    private fun mapDocToShift(id: String, d: Map<String, Any>?): Shift? {
+        if (d == null) return null
+        return try {
+            Shift(
+                id = id,
+                organizationId = d["organizationId"] as? String ?: "",
+                name = d["name"] as? String ?: "Shift",
+                startTime = d["startTime"] as? String ?: "09:00",
+                endTime = d["endTime"] as? String ?: "17:00",
+                breakMinutes = (d["breakMinutes"] as? Long)?.toInt() ?: 60,
+                colorHex = (d["colorHex"] as? Long) ?: 0xFF2563EB,
+                assignedStaffCount = (d["assignedStaffCount"] as? Long)?.toInt() ?: 0
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun leaveToMap(l: LeaveRequest): Map<String, Any> {
+        return mapOf(
+            "id" to l.id,
+            "organizationId" to l.organizationId,
+            "staffId" to l.staffId,
+            "staffName" to l.staffName,
+            "leaveType" to l.leaveType,
+            "startDate" to l.startDate,
+            "endDate" to l.endDate,
+            "isFullDay" to l.isFullDay,
+            "reason" to l.reason,
+            "status" to l.status,
+            "decisionNote" to (l.decisionNote ?: ""),
+            "requestedAt" to l.requestedAt
+        )
+    }
+
+    private fun mapDocToLeave(id: String, d: Map<String, Any>?): LeaveRequest? {
+        if (d == null) return null
+        return try {
+            LeaveRequest(
+                id = id,
+                organizationId = d["organizationId"] as? String ?: "",
+                staffId = d["staffId"] as? String ?: "",
+                staffName = d["staffName"] as? String ?: "",
+                leaveType = d["leaveType"] as? String ?: "Annual Leave",
+                startDate = d["startDate"] as? String ?: "",
+                endDate = d["endDate"] as? String ?: "",
+                isFullDay = (d["isFullDay"] as? Boolean) ?: true,
+                reason = d["reason"] as? String ?: "",
+                status = d["status"] as? String ?: "Pending",
+                decisionNote = (d["decisionNote"] as? String)?.takeIf { it.isNotBlank() },
+                requestedAt = d["requestedAt"] as? String ?: ""
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 }

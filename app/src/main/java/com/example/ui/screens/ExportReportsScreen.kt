@@ -34,12 +34,11 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CorporateFare
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
@@ -69,11 +69,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.model.ExportFormat
 import com.example.data.model.ExportResolution
 import com.example.data.model.ReportType
 import com.example.ui.theme.StaffHubBlue
 import com.example.ui.viewmodel.StaffHubViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ExportReportsScreen(
@@ -88,8 +93,11 @@ fun ExportReportsScreen(
     val reportPeriod by viewModel.reportPeriod.collectAsState()
     val isGenerating by viewModel.isGeneratingReport.collectAsState()
     val lastExportedFile by viewModel.lastExportedFile.collectAsState()
+    val customStartDate by viewModel.customStartDate.collectAsState()
+    val customEndDate by viewModel.customEndDate.collectAsState()
 
     var periodMode by remember { mutableStateOf("Period") } // "Period" or "Custom"
+    var showCustomDateDialog by remember { mutableStateOf(false) }
     var permissionGranted by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -97,6 +105,45 @@ fun ExportReportsScreen(
     ) { permissions ->
         permissionGranted = permissions.values.any { it }
         Toast.makeText(context, if (permissionGranted) "Gallery & Storage Access Active" else "Permissions Updated", Toast.LENGTH_SHORT).show()
+    }
+
+    val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+
+    // Predefined periods
+    fun setPeriodPreset(type: String) {
+        val cal = Calendar.getInstance()
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        when (type) {
+            "Today" -> {
+                viewModel.setCustomDateRange(todayStr, todayStr)
+            }
+            "This Week" -> {
+                cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+                val start = sdf.format(cal.time)
+                cal.add(Calendar.DAY_OF_WEEK, 6)
+                val end = sdf.format(cal.time)
+                viewModel.setCustomDateRange(start, end)
+            }
+            "This Month" -> {
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                val start = sdf.format(cal.time)
+                cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+                val end = sdf.format(cal.time)
+                viewModel.setCustomDateRange(start, end)
+            }
+            "Last Month" -> {
+                cal.add(Calendar.MONTH, -1)
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                val start = sdf.format(cal.time)
+                cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+                val end = sdf.format(cal.time)
+                viewModel.setCustomDateRange(start, end)
+            }
+            "Year to Date" -> {
+                val year = cal.get(Calendar.YEAR)
+                viewModel.setCustomDateRange("$year-01-01", todayStr)
+            }
+        }
     }
 
     Column(
@@ -160,12 +207,12 @@ fun ExportReportsScreen(
                             .background(if (periodMode == "Period") StaffHubBlue else Color.Transparent)
                             .clickable {
                                 periodMode = "Period"
-                                viewModel.setReportPeriod("01 Oct 2025 – 31 Oct 2025")
+                                setPeriodPreset("This Month")
                             },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Period",
+                            text = "Period Presets",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (periodMode == "Period") Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -180,12 +227,12 @@ fun ExportReportsScreen(
                             .background(if (periodMode == "Custom") StaffHubBlue else Color.Transparent)
                             .clickable {
                                 periodMode = "Custom"
-                                viewModel.setReportPeriod("15 Sep 2025 – 15 Oct 2025")
+                                showCustomDateDialog = true
                             },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Custom",
+                            text = "Custom Range",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (periodMode == "Custom") Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -194,9 +241,37 @@ fun ExportReportsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Date Range Card
+            // Preset Quick Buttons
+            if (periodMode == "Period") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val presets = listOf("This Month", "Today", "This Week", "Last Month", "Year to Date")
+                    presets.forEach { preset ->
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.clickable { setPeriodPreset(preset) }
+                        ) {
+                            Text(
+                                text = preset,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = StaffHubBlue,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Interactive Date Range Card
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -204,7 +279,7 @@ fun ExportReportsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        Toast.makeText(context, "Period: $reportPeriod", Toast.LENGTH_SHORT).show()
+                        showCustomDateDialog = true
                     }
             ) {
                 Row(
@@ -222,19 +297,30 @@ fun ExportReportsScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = reportPeriod,
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                        Column {
+                            Text(
+                                text = "Selected Date Range",
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            )
+                            Text(
+                                text = reportPeriod,
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Change", fontSize = 12.sp, color = StaffHubBlue, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = "Select Date",
+                            tint = StaffHubBlue,
+                            modifier = Modifier.size(13.dp)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                        contentDescription = "Select Date",
-                        tint = Color(0xFFCBD5E1),
-                        modifier = Modifier.size(13.dp)
-                    )
                 }
             }
 
@@ -266,13 +352,13 @@ fun ExportReportsScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Gallery & File Access",
+                                text = "Gallery & File Permissions",
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (permissionGranted) "Full access granted" else "Ready to save 4K/8K files",
+                                text = if (permissionGranted) "Access granted" else "Required to export & save files",
                                 fontSize = 11.5.sp,
                                 color = if (permissionGranted) Color(0xFF059669) else Color(0xFF64748B)
                             )
@@ -285,7 +371,8 @@ fun ExportReportsScreen(
                                 permissionLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.READ_MEDIA_IMAGES,
-                                        Manifest.permission.READ_MEDIA_VIDEO
+                                        Manifest.permission.READ_MEDIA_VIDEO,
+                                        Manifest.permission.POST_NOTIFICATIONS
                                     )
                                 )
                             } else {
@@ -300,14 +387,14 @@ fun ExportReportsScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
-                        Text(text = if (permissionGranted) "Active" else "Request Access", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = if (permissionGranted) "Active" else "Grant Access", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Resolution & Quality Header (NEW: 4K & 8K Resolution options)
+            // Resolution & Quality Header (4K & 8K options)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -331,7 +418,6 @@ fun ExportReportsScreen(
             ) {
                 ExportResolution.entries.forEach { res ->
                     val isSelected = selectedExportResolution == res
-                    val isUltra = res == ExportResolution.ULTRA_4K || res == ExportResolution.EXTREME_8K
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -384,7 +470,7 @@ fun ExportReportsScreen(
 
             // Report Type Section Header
             Text(
-                text = "Report Type",
+                text = "Report Type (Exports Only Related Data)",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -476,7 +562,7 @@ fun ExportReportsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Format Badge Grid (PDF, PNG, TXT, CSV, Markdown)
+            // Format Badges
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -535,7 +621,7 @@ fun ExportReportsScreen(
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // Prominent Action Button: "Generate & Download"
+            // Generate & Export Button
             Button(
                 onClick = {
                     viewModel.generateAndShareReport(context)
@@ -576,7 +662,7 @@ fun ExportReportsScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Reports are rendered in ${selectedExportResolution.resolutionTag} and can be saved to your device gallery or shared.",
+                text = "Reports are filtered by $reportPeriod and contain strictly ${selectedReportType.title} records.",
                 fontSize = 12.sp,
                 color = Color(0xFF64748B),
                 textAlign = TextAlign.Center,
@@ -600,7 +686,7 @@ fun ExportReportsScreen(
                             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF059669))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Exported: ${file.name} (${selectedExportResolution.shortLabel})",
+                                text = "Exported: ${file.name}",
                                 fontSize = 12.sp,
                                 color = Color(0xFF065F46),
                                 fontWeight = FontWeight.Medium
@@ -611,6 +697,88 @@ fun ExportReportsScreen(
             }
 
             Spacer(modifier = Modifier.height(100.dp))
+        }
+    }
+
+    // Custom Date Range Dialog
+    if (showCustomDateDialog) {
+        var startInput by remember { mutableStateOf(customStartDate) }
+        var endInput by remember { mutableStateOf(customEndDate) }
+
+        Dialog(onDismissRequest = { showCustomDateDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Set Custom Date Range",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = StaffHubBlue)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = startInput,
+                        onValueChange = { startInput = it },
+                        label = { Text("Start Date (YYYY-MM-DD)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = endInput,
+                        onValueChange = { endInput = it },
+                        label = { Text("End Date (YYYY-MM-DD)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(
+                            onClick = { showCustomDateDialog = false },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Cancel")
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Button(
+                            onClick = {
+                                if (startInput.isNotBlank() && endInput.isNotBlank()) {
+                                    viewModel.setCustomDateRange(startInput.trim(), endInput.trim())
+                                    showCustomDateDialog = false
+                                    Toast.makeText(context, "Period set to $startInput – $endInput", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Please enter valid dates", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StaffHubBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Apply Range")
+                        }
+                    }
+                }
+            }
         }
     }
 }

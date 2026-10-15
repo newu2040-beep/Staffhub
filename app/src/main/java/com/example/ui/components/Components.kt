@@ -69,11 +69,13 @@ fun StaffAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
     backgroundColor: Color = StaffHubBlue,
-    avatarUrl: String? = null
+    avatarUrl: String? = null,
+    imageUrl: String? = avatarUrl
 ) {
-    if (!avatarUrl.isNullOrBlank()) {
+    val finalUrl = imageUrl ?: avatarUrl
+    if (!finalUrl.isNullOrBlank()) {
         coil.compose.AsyncImage(
-            model = avatarUrl,
+            model = finalUrl,
             contentDescription = name,
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             modifier = modifier

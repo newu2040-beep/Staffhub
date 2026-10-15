@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -46,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AttendanceStatus
@@ -204,17 +208,61 @@ fun StaffListScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         // Staff List Cards
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp)
-        ) {
-            items(staffList) { staff ->
-                val status = when {
-                    staff.status == "On Leave" -> AttendanceStatus.ON_LEAVE
-                    staff.absentDays > 4 -> AttendanceStatus.ABSENT
-                    else -> AttendanceStatus.PRESENT
+        if (staffList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        tint = StaffHubBlue.copy(alpha = 0.6f),
+                        modifier = Modifier.size(56.dp)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "No Staff Members Found",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Add team members manually or restore sample demo data from the Settings tab.",
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = onAddStaffClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = StaffHubBlue),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Staff Manually", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+            ) {
+                items(staffList) { staff ->
+                    val status = when {
+                        staff.status == "On Leave" -> AttendanceStatus.ON_LEAVE
+                        staff.absentDays > 4 -> AttendanceStatus.ABSENT
+                        else -> AttendanceStatus.PRESENT
+                    }
 
                 Card(
                     shape = RoundedCornerShape(18.dp),
@@ -303,3 +351,5 @@ fun StaffListScreen(
         }
     }
 }
+}
+

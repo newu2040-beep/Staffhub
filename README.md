@@ -26,7 +26,7 @@ This genuine Android debug APK was compiled inside Google AI Studio's native And
 - **Build Variant:** `debug`
 - **Location:** `apk-distribution/app-debug.apk`
 - **File Size:** ~29 MB
-- **SHA-256 Checksum:** `27fae75ea4032481f4653f5d3a6ebaa9a3c547dd09466c21eee95b0b68e7c5f9`
+- **SHA-256 Checksum:** `5f2fc0bf061440fff20637c5ddc286f95b01c7bbafc1dea9a7c13db486be4797`
 - **Min SDK:** Android 7.0 (API 24)
 - **Target SDK:** Android 15+ (API 36)
 

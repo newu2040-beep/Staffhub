@@ -96,6 +96,33 @@ class StaffHubViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val isDemoDataActive: StateFlow<Boolean> = repository.isDemoDataActive
+
+    // Custom Date Range for Reports
+    private val _customStartDate = MutableStateFlow(java.text.SimpleDateFormat("yyyy-MM-01", java.util.Locale.getDefault()).format(java.util.Date()))
+    val customStartDate: StateFlow<String> = _customStartDate.asStateFlow()
+
+    private val _customEndDate = MutableStateFlow(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()))
+    val customEndDate: StateFlow<String> = _customEndDate.asStateFlow()
+
+    fun setCustomDateRange(start: String, end: String) {
+        _customStartDate.value = start
+        _customEndDate.value = end
+        _reportPeriod.value = "$start – $end"
+    }
+
+    fun clearAllDemoData() {
+        repository.clearAllDemoData()
+    }
+
+    fun loadDemoData() {
+        repository.loadDemoData()
+    }
+
+    fun updateUserProfile(profile: UserProfile) {
+        repository.updateUserProfile(profile)
+    }
+
     fun setTheme(theme: AppTheme) {
         _currentTheme.value = theme
     }

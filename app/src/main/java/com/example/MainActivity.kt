@@ -61,6 +61,33 @@ fun StaffHubApp(viewModel: StaffHubViewModel) {
     var showShiftDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
 
+    // Request all permissions (notification, gallery, files) on app start
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val grantedCount = results.values.count { it }
+        if (grantedCount > 0) {
+            android.widget.Toast.makeText(context, "Permissions enabled for StaffHub", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val permissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                android.Manifest.permission.POST_NOTIFICATIONS,
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VIDEO
+            )
+        } else {
+            arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        }
+        permissionLauncher.launch(permissions)
+    }
+
     // If logged out, render Login screen
     if (currentUser == null) {
         LoginScreen(

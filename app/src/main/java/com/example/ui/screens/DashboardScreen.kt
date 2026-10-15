@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AttendanceStatus
@@ -465,9 +466,37 @@ fun DashboardScreen(
         }
 
         // Today's Attendance Rows
-        items(staffList.take(6)) { staff ->
-            val record = attendanceList.find { it.staffId == staff.id }
-            val status = record?.status ?: AttendanceStatus.PRESENT
+        if (staffList.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No staff added yet",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Tap 'Add Staff' above to add team members manually.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(staffList.take(6)) { staff ->
+                val record = attendanceList.find { it.staffId == staff.id }
+                val status = record?.status ?: AttendanceStatus.PRESENT
 
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -523,9 +552,10 @@ fun DashboardScreen(
                 }
             }
         }
+    }
 
-        item {
-            Spacer(modifier = Modifier.height(100.dp))
-        }
+    item {
+        Spacer(modifier = Modifier.height(100.dp))
+    }
     }
 }

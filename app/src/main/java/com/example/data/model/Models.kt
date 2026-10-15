@@ -107,9 +107,15 @@ data class UserProfile(
     val email: String = "",
     val displayName: String = "Rahul Shah",
     val role: UserRole = UserRole.OWNER,
+    val customRoleTitle: String = "Organization Owner",
     val organizationId: String = "org_staffhub_default",
     val organizationName: String = "StaffHub Org",
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val gender: String = "Male", // "Male" or "Female" only
+    val age: Int = 30,
+    val phone: String = "+977 9841234567",
+    val bio: String = "Founder & Chief Executive",
+    val emergencyContact: String = ""
 )
 
 enum class ReportType(val title: String, val subtitle: String) {
