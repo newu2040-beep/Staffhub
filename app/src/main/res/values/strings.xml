@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StaffHub</string>
+    <string name="default_web_client_id">530218685955-3ha9faug73qlr2npsrdmftt43qd4rh0d.apps.googleusercontent.com</string>
+    <string name="firestore_database_id">(default)</string>
+</resources>

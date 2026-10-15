@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account and profile details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Business or organization managed in StaffHub",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "businessCategory": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "timeZone": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Employee or staff member in organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "fullName", "employeeId"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily attendance record for an employee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "staffId": { "type": "string" },
+        "staffName": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "checkInTime": { "type": "string" }
+      },
+      "required": ["id", "staffId", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile documents"
+    },
+    "/organizations/{organizationId}": {
+      "schema": { "$ref": "#/entities/Organization" },
+      "description": "Organization details"
+    },
+    "/organizations/{organizationId}/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Staff roster within an organization"
+    },
+    "/organizations/{organizationId}/attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Attendance logs within an organization"
+    }
+  }
+}

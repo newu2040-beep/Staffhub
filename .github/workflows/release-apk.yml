@@ -1,0 +1,124 @@
+name: Publish StaffHub APK Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Publish Pre-Compiled APK to GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Pre-Compiled APK
+        id: verify_apk
+        run: |
+          echo "=================================================="
+          echo "Verifying pre-compiled APK from Google AI Studio"
+          echo "=================================================="
+          
+          APK_FILE="apk-distribution/app-debug.apk"
+          CHECKSUM_FILE="apk-distribution/app-debug.apk.sha256"
+          
+          if [ ! -f "$APK_FILE" ]; then
+            echo "Error: Pre-compiled APK not found at $APK_FILE"
+            exit 1
+          fi
+          
+          APK_SIZE=$(du -h "$APK_FILE" | cut -f1)
+          APK_BYTES=$(wc -c < "$APK_FILE")
+          APK_SHA256=$(sha256sum "$APK_FILE" | awk '{print $1}')
+          
+          echo "APK Found: $APK_FILE"
+          echo "Size: $APK_SIZE ($APK_BYTES bytes)"
+          echo "SHA-256: $APK_SHA256"
+          
+          if [ -f "$CHECKSUM_FILE" ]; then
+            echo "Existing checksum file found:"
+            cat "$CHECKSUM_FILE"
+          else
+            echo "$APK_SHA256  app-debug.apk" > "$CHECKSUM_FILE"
+          fi
+          
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+          echo "apk_sha256=$APK_SHA256" >> $GITHUB_OUTPUT
+
+      - name: Configure Release Metadata
+        id: release_meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            RELEASE_TITLE="StaffHub $TAG_NAME"
+          else
+            TAG_NAME="v1.0.0"
+            RELEASE_TITLE="StaffHub Latest Release ($TAG_NAME)"
+          fi
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "title=$RELEASE_TITLE" >> $GITHUB_OUTPUT
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.title }}
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            apk-distribution/app-debug.apk
+            apk-distribution/app-debug.apk.sha256
+          body: |
+            # 🚀 StaffHub — Native Android Debug APK
+            
+            All-in-One Staff & Workforce Management Application for tracking attendance, shifts, leave, departments, working hours, and reports.
+            
+            ---
+            
+            ### 📱 Application Identity & Specifications
+            - **Application Name:** StaffHub
+            - **Package ID:** `com.staffhub.apps`
+            - **Artifact:** `app-debug.apk`
+            - **File Size:** ${{ steps.verify_apk.outputs.apk_size }}
+            - **SHA-256 Checksum:** `${{ steps.verify_apk.outputs.apk_sha256 }}`
+            - **Minimum SDK:** Android 7.0 (API 24)
+            - **Target SDK:** Android 15+ (API 36)
+            - **Build Source:** Google AI Studio Native Android SDK Build Environment
+            
+            ---
+            
+            ### 📥 Direct Download Links
+            - **Permanent Latest APK Link:**
+              https://github.com/${{ github.repository }}/releases/latest/download/app-debug.apk
+            - **Release Tag APK Link:**
+              https://github.com/${{ github.repository }}/releases/download/${{ steps.release_meta.outputs.tag }}/app-debug.apk
+            - **Direct Repository Raw Download:**
+              https://github.com/${{ github.repository }}/raw/main/apk-distribution/app-debug.apk
+            
+            ---
+            
+            ### 🛠️ Installation Instructions
+            1. Download `app-debug.apk` on your Android device from the direct link above.
+            2. Open the downloaded file. If prompted, enable **Install unknown apps** for your browser/file manager.
+            3. Tap **Install** and launch **StaffHub**.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print Permanent Download URLs
+        run: |
+          echo "=================================================="
+          echo "✅ APK PUBLISHED SUCCESSFULLY"
+          echo "=================================================="
+          echo "Direct Permanent Download URL:"
+          echo "https://github.com/${{ github.repository }}/releases/latest/download/app-debug.apk"
+          echo "=================================================="
