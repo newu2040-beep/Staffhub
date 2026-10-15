@@ -107,6 +107,7 @@ fun ExportReportsScreen(
         Toast.makeText(context, if (permissionGranted) "Gallery & Storage Access Active" else "Permissions Updated", Toast.LENGTH_SHORT).show()
     }
 
+
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     // Predefined periods
@@ -393,6 +394,7 @@ fun ExportReportsScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+
 
             // Resolution & Quality Header (4K & 8K options)
             Row(

@@ -93,16 +93,6 @@ fun MoreScreen(
     var showOwnerProfileDialog by remember { mutableStateOf(false) }
     var showClearDataConfirmDialog by remember { mutableStateOf(false) }
 
-    val sha1Fingerprint = "66:62:A1:7C:5C:22:DE:F9:E8:90:EC:23:E9:B8:E4:84:F1:14:12:B8"
-    val sha256Fingerprint = "A7:5D:71:FC:90:5A:CF:00:E4:32:E1:77:20:A7:87:B8:16:87:2E:3C:E5:CA:27:2A:3E:98:42:D8:3E:6A:74:61"
-
-    fun copyToClipboard(label: String, text: String) {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText(label, text)
-        clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -216,114 +206,7 @@ fun MoreScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
 
-        // Backend & Fingerprint Configuration Card
-        Text(
-            text = "Firebase & Backend Credentials",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF64748B),
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-        )
-
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF2563EB).copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Fingerprint, contentDescription = null, tint = StaffHubBlue, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "App Signing Fingerprint",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Add this in Firebase Console for Google Sign-In",
-                                fontSize = 11.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            copyToClipboard("SHA-1 & SHA-256", "SHA1: $sha1Fingerprint\nSHA256: $sha256Fingerprint")
-                        }
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy Fingerprint", tint = StaffHubBlue)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "SHA-1 Certificate Fingerprint:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF475569)
-                        )
-                        Text(
-                            text = sha1Fingerprint,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Package ID: com.staffhub.apps",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = StaffHubBlue
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = {
-                        copyToClipboard("SHA-1 Fingerprint", sha1Fingerprint)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = StaffHubBlue),
-                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Copy SHA-1 for Firebase Console", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         // Data Management (Remove All Demo Data / Restore)
         Text(
@@ -492,7 +375,6 @@ fun MoreScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column {
                 MoreMenuItem(
                     title = "Sign Out",
                     subtitle = "Exit your current session",
@@ -503,7 +385,6 @@ fun MoreScreen(
                         onSignOut()
                     }
                 )
-            }
         }
 
         Spacer(modifier = Modifier.height(28.dp))
